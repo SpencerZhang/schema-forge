@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: "jdbc:mysql://127.0.0.1:3306/?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai"
+    username: your_username
+    password: your_password
+
+screw:
+  schemas:
+    - your_database
+  engine:
+    file-output-dir: /Users/spencerchang/Downloads/
+    open-output-dir: true
+    file-type: HTML
+    produce-type: freemarker
