@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import appIcon from "./assets/schemaforge-icon-distinctive.png";
 import "./App.css";
 
-type FileType = "HTML" | "WORD" | "MD";
+type FileType = "HTML" | "MD";
 type ProduceType = "freemarker" | "velocity";
 type AppConfig = {
   spring: {
@@ -86,7 +86,7 @@ function App() {
   ]);
 
   useEffect(() => {
-    setStatus("CLI 生成器按需启动，配置不会保存到本地");
+    setStatus("ForgeCore 已启用，配置不会保存到本地");
   }, []);
 
   async function generateDoc() {
@@ -219,7 +219,6 @@ function App() {
                     }
                   >
                     <option value="HTML">HTML</option>
-                    <option value="WORD">WORD</option>
                     <option value="MD">MD</option>
                   </select>
                 </label>

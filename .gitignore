@@ -14,6 +14,7 @@ pnpm-debug.log*
 .env.*
 !.env.example
 .schema-forge/
+schema-forge-output/
 
 # Node / Vite
 node_modules/
