@@ -134,7 +134,7 @@ fn generator_jar_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let jar_path = project_dir
         .join("backend")
         .join("target")
-        .join("schema-forge-generator-0.1.0-SNAPSHOT.jar");
+        .join("schema-forge-generator-0.1.0.jar");
     if Path::new(&jar_path).exists() {
         Ok(jar_path)
     } else {

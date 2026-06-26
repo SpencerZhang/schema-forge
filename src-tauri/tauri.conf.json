@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "SchemaForge",
-        "width": 1080,
-        "height": 760
+        "title": "SchemaForge - 数据库字典生成器",
+        "width": 1280,
+        "minWidth": 1180,
+        "height": 860,
+        "minHeight": 760
       }
     ],
     "security": {
@@ -25,7 +27,7 @@
     "active": true,
     "targets": ["app"],
     "resources": {
-      "../backend/target/schema-forge-generator-0.1.0-SNAPSHOT.jar": "schema-forge-generator.jar"
+      "../backend/target/schema-forge-generator-0.1.0.jar": "schema-forge-generator.jar"
     },
     "icon": [
       "icons/32x32.png",

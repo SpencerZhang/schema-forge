@@ -103,86 +103,16 @@ function App() {
     }
   }
 
-  const yaml = useMemo(() => {
-    const schemaLines = schemaList
-      .map((schema) => `    - ${schema}`)
-      .join("\n");
-    const fileNameLine = fileName.trim()
-      ? `    file-name: ${fileName.trim()}\n`
-      : "";
-
-    return `spring:
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: "${jdbcUrl}"
-    username: ${username}
-    password: ${password ? "******" : ""}
-
-screw:
-  schemas:
-${schemaLines || "    - your_database"}
-  engine:
-    file-output-dir: ${outputDir}
-    open-output-dir: ${openOutputDir}
-    file-type: ${fileType}
-    produce-type: ${produceType}
-${fileNameLine}`;
-  }, [
-    fileName,
-    fileType,
-    jdbcUrl,
-    openOutputDir,
-    outputDir,
-    password,
-    produceType,
-    schemaList,
-    username,
-  ]);
-
-  const statusTone =
-    status.includes("失败") || status.includes("未启动")
-      ? "danger"
-      : status.includes("正在")
-        ? "busy"
-        : "ready";
-
   return (
     <main className="app-shell">
-      <aside className="rail">
-        <div className="brand-block">
-          <img className="app-icon" src={appIcon} alt="" />
-          <div>
-            <p className="eyebrow">SchemaForge</p>
-            <h1>数据库字典工坊</h1>
-          </div>
-        </div>
-
-        <nav className="nav-stack">
-          <button className="nav-item active" type="button">
-            <span>01</span>
-            配置源
-          </button>
-          <button className="nav-item" type="button">
-            <span>02</span>
-            生成任务
-          </button>
-          <button className="nav-item" type="button">
-            <span>03</span>
-            输出记录
-          </button>
-        </nav>
-
-        <div className="rail-footer">
-          <span className={`status-dot ${statusTone}`} />
-          <p>{status}</p>
-        </div>
-      </aside>
-
       <section className="workspace">
         <header className="topbar">
-          <div>
-            <p className="section-kicker">配置中心</p>
-            <h2>配置数据库连接并生成数据字典</h2>
+          <div className="title-block">
+            <img className="app-icon" src={appIcon} alt="" />
+            <div>
+              <p className="section-kicker">SchemaForge</p>
+              <h2>数据库字典生成器</h2>
+            </div>
           </div>
           <div className="actions">
             <button className="primary" type="button" onClick={generateDoc}>
@@ -328,22 +258,32 @@ ${fileNameLine}`;
           </form>
 
           <aside className="side-panel">
-            <section className="preview-panel">
-              <div className="preview-header">
+            <section className="task-panel">
+              <h3>任务摘要</h3>
+              <div className="task-list">
                 <div>
-                  <h3>配置预览</h3>
-                  <p>仅用于本次生成，不写入本地文件</p>
+                  <span>Schema</span>
+                  <strong>{schemaList.join(", ") || "your_database"}</strong>
                 </div>
-                <span>YAML</span>
+                <div>
+                  <span>输出格式</span>
+                  <strong>{fileType}</strong>
+                </div>
+                <div>
+                  <span>模板引擎</span>
+                  <strong>{produceType}</strong>
+                </div>
+                <div>
+                  <span>文件名</span>
+                  <strong>{fileName.trim() || "默认使用 Schema 名称"}</strong>
+                </div>
               </div>
-              <pre>{yaml}</pre>
             </section>
 
             <section className="run-panel">
               <div className="run-glow" />
               <h3>生成状态</h3>
               <p>{status}</p>
-              <div className="output-path">{outputDir}</div>
             </section>
           </aside>
         </div>
