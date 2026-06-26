@@ -10,13 +10,11 @@ import com.spencerchang.schemaforge.model.AppConfig;
 import com.spencerchang.schemaforge.model.GenerateResult;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Service
 public class DocumentGenerationService {
 
     public GenerateResult generate(AppConfig config) {

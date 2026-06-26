@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import appIcon from "./assets/schemaforge-icon-distinctive.png";
 import "./App.css";
 
@@ -24,8 +25,6 @@ type AppConfig = {
     };
   };
 };
-
-const API_BASE = "http://127.0.0.1:18080/api";
 
 function App() {
   const [jdbcUrl, setJdbcUrl] = useState(
@@ -87,50 +86,20 @@ function App() {
   ]);
 
   useEffect(() => {
-    fetch(`${API_BASE}/config`)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        return response.json() as Promise<AppConfig>;
-      })
-      .then((remoteConfig) => {
-        setJdbcUrl(remoteConfig.spring.datasource.url);
-        setUsername(remoteConfig.spring.datasource.username);
-        setPassword(remoteConfig.spring.datasource.password);
-        setSchemas(remoteConfig.screw.schemas.join("\n"));
-        setOutputDir(remoteConfig.screw.engine["file-output-dir"]);
-        setOpenOutputDir(remoteConfig.screw.engine["open-output-dir"]);
-        setFileType(remoteConfig.screw.engine["file-type"]);
-        setProduceType(remoteConfig.screw.engine["produce-type"]);
-        setFileName(remoteConfig.screw.engine["file-name"] ?? "");
-        setStatus("后端服务已连接，配置不会保存到本地");
-      })
-      .catch(() => {
-        setStatus("后端服务未启动");
-      });
+    setStatus("CLI 生成器按需启动，配置不会保存到本地");
   }, []);
 
   async function generateDoc() {
     setStatus("正在生成文档...");
     try {
-      const response = await fetch(`${API_BASE}/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
-      });
-      if (!response.ok) {
-        const message = await response.text();
-        setStatus(`生成失败：${message || `HTTP ${response.status}`}`);
-        return;
-      }
-      const result = (await response.json()) as {
+      const result = await invoke<{
         schemas: string[];
-        outputDir: string;
-      };
-      setStatus(`生成完成：${result.schemas.join(", ")} -> ${result.outputDir}`);
-    } catch {
-      setStatus("生成失败：后端服务未启动");
+        output_dir: string;
+        stdout: string;
+      }>("generate_doc", { config });
+      setStatus(`生成完成：${result.schemas.join(", ")} -> ${result.output_dir}`);
+    } catch (error) {
+      setStatus(`生成失败：${String(error)}`);
     }
   }
 
@@ -147,7 +116,7 @@ function App() {
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: "${jdbcUrl}"
     username: ${username}
-    password: ${password}
+    password: ${password ? "******" : ""}
 
 screw:
   schemas:

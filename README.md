@@ -2,7 +2,7 @@
 
 SchemaForge is a desktop tool for generating database dictionary documents from database schemas.
 
-The desktop shell is built with Tauri, React, and TypeScript. The local backend is a Spring Boot service that uses `screw-core` to inspect database metadata and generate documents.
+The desktop shell is built with Tauri, React, and TypeScript. Document generation is delegated to a lightweight Java CLI generator that uses `screw-core` to inspect database metadata and generate documents.
 
 ## Features
 
@@ -18,7 +18,7 @@ The desktop shell is built with Tauri, React, and TypeScript. The local backend 
 schema-forge/
   src/                  React frontend
   src-tauri/            Tauri desktop shell
-  backend/              Spring Boot local backend
+  backend/              Java CLI generator
   config-template/      Example application.yml template
 ```
 
@@ -30,10 +30,10 @@ Install frontend dependencies:
 npm install
 ```
 
-Start the backend:
+Build the Java generator:
 
 ```bash
-npm run backend:dev
+npm run generator:build
 ```
 
 Start the desktop app:
@@ -46,14 +46,14 @@ Build checks:
 
 ```bash
 npm run build
-npm run backend:build
+npm run generator:build
 ```
 
 ## Configuration Behavior
 
-SchemaForge currently sends the UI configuration directly to the local backend when generating documents.
+SchemaForge currently writes the UI configuration to a temporary file only when a generation task starts, passes that file to the Java CLI generator, and removes the temporary file after the generator exits.
 
-It does not save database credentials or `application.yml` to disk by default.
+It does not save database credentials or `application.yml` to a persistent file by default.
 
 ## Open Source Notice
 

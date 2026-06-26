@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "backend:dev": "cd backend && mvn spring-boot:run",
-    "backend:build": "cd backend && mvn -DskipTests package",
+    "generator:build": "cd backend && mvn -DskipTests package",
+    "generator:run": "cd backend && java -jar target/schema-forge-generator-0.1.0-SNAPSHOT.jar",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
