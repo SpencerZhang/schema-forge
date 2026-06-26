@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import appIcon from "./assets/schemaforge-icon-distinctive.png";
 import "./App.css";
 
-type FileType = "HTML" | "MD";
+type FileType = "HTML" | "WORD" | "MD";
 type ProduceType = "freemarker" | "velocity";
 type AppConfig = {
   spring: {
@@ -219,6 +219,7 @@ function App() {
                     }
                   >
                     <option value="HTML">HTML</option>
+                    <option value="WORD">WORD</option>
                     <option value="MD">MD</option>
                   </select>
                 </label>

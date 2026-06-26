@@ -1,7 +1,9 @@
 use crate::{AppConfig, DataSourceConfig, EngineConfig};
+use docx_rs::{Docx, Paragraph, Run, Table as DocxTable, TableCell, TableRow};
 use mysql::{params, prelude::Queryable, OptsBuilder, Pool};
 use std::collections::HashMap;
 use std::fs;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -285,7 +287,7 @@ fn render_schema(
     match file_type.as_str() {
         "HTML" => write_file(output_dir, base_name, "html", &render_html(database)),
         "MD" => write_file(output_dir, base_name, "md", &render_markdown(database)),
-        "WORD" => Err("ForgeCore Word output is not implemented yet.".to_string()),
+        "WORD" => write_docx(output_dir, base_name, database),
         _ => Err(format!("Unsupported file type: {}", engine.file_type)),
     }
 }
@@ -298,6 +300,21 @@ fn write_file(
 ) -> Result<PathBuf, String> {
     let path = Path::new(output_dir).join(format!("{}.{}", safe_file_name(base_name), extension));
     fs::write(&path, content)
+        .map_err(|error| format!("Failed to write {}: {error}", path.display()))?;
+    Ok(path)
+}
+
+fn write_docx(
+    output_dir: &str,
+    base_name: &str,
+    database: &DatabaseSchema,
+) -> Result<PathBuf, String> {
+    let path = Path::new(output_dir).join(format!("{}.docx", safe_file_name(base_name)));
+    let file = File::create(&path)
+        .map_err(|error| format!("Failed to create {}: {error}", path.display()))?;
+    render_docx(database)
+        .build()
+        .pack(file)
         .map_err(|error| format!("Failed to write {}: {error}", path.display()))?;
     Ok(path)
 }
@@ -402,6 +419,72 @@ fn render_html(database: &DatabaseSchema) -> String {
     }
     html.push_str("</body>\n</html>\n");
     html
+}
+
+fn render_docx(database: &DatabaseSchema) -> Docx {
+    let mut doc = Docx::new().add_paragraph(heading(
+        &format!("Database Dictionary: {}", database.name),
+        32,
+    ));
+    for table in &database.tables {
+        doc = doc.add_paragraph(heading(&table.name, 24));
+        if !table.comment.is_empty() {
+            doc = doc.add_paragraph(paragraph(&table.comment));
+        }
+        doc = doc.add_table(column_docx_table(table));
+        if !table.indexes.is_empty() {
+            doc = doc
+                .add_paragraph(heading("Indexes", 20))
+                .add_table(index_docx_table(table));
+        }
+    }
+    doc
+}
+
+fn column_docx_table(table: &Table) -> DocxTable {
+    let mut rows = vec![docx_row(&[
+        "Column", "Type", "Nullable", "Key", "Default", "Extra", "Comment",
+    ])];
+    for column in &table.columns {
+        rows.push(docx_row(&[
+            &column.name,
+            &column.data_type,
+            yes_no(column.nullable),
+            &column.key,
+            &column.default_value,
+            &column.extra,
+            &column.comment,
+        ]));
+    }
+    DocxTable::new(rows)
+}
+
+fn index_docx_table(table: &Table) -> DocxTable {
+    let mut rows = vec![docx_row(&["Name", "Unique", "Columns"])];
+    for index in &table.indexes {
+        rows.push(docx_row(&[
+            &index.name,
+            yes_no(index.unique),
+            &index.columns.join(", "),
+        ]));
+    }
+    DocxTable::new(rows)
+}
+
+fn docx_row(values: &[&str]) -> TableRow {
+    TableRow::new(values.iter().map(|value| docx_cell(value)).collect())
+}
+
+fn docx_cell(value: &str) -> TableCell {
+    TableCell::new().add_paragraph(paragraph(value))
+}
+
+fn heading(value: &str, size: usize) -> Paragraph {
+    Paragraph::new().add_run(Run::new().add_text(value).bold().size(size))
+}
+
+fn paragraph(value: &str) -> Paragraph {
+    Paragraph::new().add_run(Run::new().add_text(value))
 }
 
 fn safe_file_name(value: &str) -> String {
