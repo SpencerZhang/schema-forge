@@ -9,7 +9,6 @@ The desktop shell is built with Tauri, React, and TypeScript. Document generatio
 - Configure JDBC connection information in the desktop UI
 - Generate database dictionary documents for one or more schemas
 - Support HTML, Word, and Markdown output types provided by `screw-core`
-- Preview the generated YAML-style configuration before running
 - Keep configuration in memory for the current window; the app does not persist database credentials by default
 
 ## Project Structure
@@ -73,12 +72,17 @@ https://www.gnu.org/licenses/lgpl-3.0.html
 
 When distributing SchemaForge, make sure to comply with the LGPL-3.0 obligations for the `screw-core` dependency and its notices. SchemaForge is not affiliated with or endorsed by the `screw` project.
 
+## License
+
+SchemaForge is released under the MIT License. See [LICENSE](LICENSE).
+
 ## Key Dependencies
 
 - Tauri
 - React
 - TypeScript
-- Spring Boot
+- Java CLI generator
+- Maven
 - `cn.smallbun.screw:screw-core`
 - HikariCP
 - MySQL Connector/J

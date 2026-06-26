@@ -9,7 +9,7 @@ screw:
   schemas:
     - your_database
   engine:
-    file-output-dir: /Users/spencerchang/Downloads/
+    file-output-dir: ./schema-forge-output
     open-output-dir: true
     file-type: HTML
     produce-type: freemarker

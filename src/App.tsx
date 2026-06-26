@@ -33,7 +33,7 @@ function App() {
   const [username, setUsername] = useState("your_username");
   const [password, setPassword] = useState("your_password");
   const [schemas, setSchemas] = useState("your_database");
-  const [outputDir, setOutputDir] = useState("/Users/spencerchang/Downloads/");
+  const [outputDir, setOutputDir] = useState("./schema-forge-output");
   const [openOutputDir, setOpenOutputDir] = useState(true);
   const [fileType, setFileType] = useState<FileType>("HTML");
   const [produceType, setProduceType] = useState<ProduceType>("freemarker");
