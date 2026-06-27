@@ -564,3 +564,110 @@ fn require_text(value: &str, field: &str) -> Result<(), String> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn renders_fixture_documents_for_all_supported_file_types() {
+        let output_dir = temp_output_dir();
+        fs::create_dir_all(&output_dir).expect("create fixture output dir");
+        let schema = fixture_schema();
+
+        let html_path = render_schema(&schema, &engine("HTML"), output_dir.to_str().unwrap())
+            .expect("render html fixture");
+        let html = fs::read_to_string(&html_path).expect("read html fixture");
+        assert!(html.contains("Database Dictionary: fixture_schema"));
+        assert!(html.contains("<code>users</code>"));
+        assert!(html.contains("User display name"));
+
+        let md_path = render_schema(&schema, &engine("MD"), output_dir.to_str().unwrap())
+            .expect("render markdown fixture");
+        let markdown = fs::read_to_string(&md_path).expect("read markdown fixture");
+        assert!(markdown.contains("# Database Dictionary: fixture_schema"));
+        assert!(markdown.contains("| `display_name` | `varchar(120)` | YES |"));
+        assert!(markdown.contains("idx_users_email"));
+
+        let docx_path = render_schema(&schema, &engine("WORD"), output_dir.to_str().unwrap())
+            .expect("render docx fixture");
+        let docx = fs::read(&docx_path).expect("read docx fixture");
+        assert!(docx.len() > 100);
+        assert_eq!(&docx[0..2], b"PK");
+
+        fs::remove_dir_all(&output_dir).expect("remove fixture output dir");
+    }
+
+    fn engine(file_type: &str) -> EngineConfig {
+        EngineConfig {
+            file_output_dir: String::new(),
+            open_output_dir: false,
+            file_type: file_type.to_string(),
+            produce_type: "forgecore".to_string(),
+            file_name: Some("fixture-dictionary".to_string()),
+        }
+    }
+
+    fn fixture_schema() -> DatabaseSchema {
+        DatabaseSchema {
+            name: "fixture_schema".to_string(),
+            tables: vec![Table {
+                name: "users".to_string(),
+                comment: "Application users".to_string(),
+                columns: vec![
+                    Column {
+                        name: "id".to_string(),
+                        data_type: "bigint".to_string(),
+                        nullable: false,
+                        default_value: String::new(),
+                        comment: "Primary key".to_string(),
+                        key: "PRI".to_string(),
+                        extra: "auto_increment".to_string(),
+                    },
+                    Column {
+                        name: "display_name".to_string(),
+                        data_type: "varchar(120)".to_string(),
+                        nullable: true,
+                        default_value: String::new(),
+                        comment: "User display name".to_string(),
+                        key: String::new(),
+                        extra: String::new(),
+                    },
+                    Column {
+                        name: "email".to_string(),
+                        data_type: "varchar(255)".to_string(),
+                        nullable: false,
+                        default_value: String::new(),
+                        comment: "Login email".to_string(),
+                        key: "UNI".to_string(),
+                        extra: String::new(),
+                    },
+                ],
+                indexes: vec![
+                    Index {
+                        name: "PRIMARY".to_string(),
+                        columns: vec!["id".to_string()],
+                        unique: true,
+                    },
+                    Index {
+                        name: "idx_users_email".to_string(),
+                        columns: vec!["email".to_string()],
+                        unique: true,
+                    },
+                ],
+            }],
+        }
+    }
+
+    fn temp_output_dir() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "schema-forge-fixture-{}-{nanos}",
+            std::process::id()
+        ))
+    }
+}
