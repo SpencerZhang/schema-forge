@@ -66,7 +66,7 @@ impl ForgeCore {
         fs::create_dir_all(&output_dir)
             .map_err(|error| format!("Failed to create output directory: {error}"))?;
 
-        let inspector = MySqlInspector::new(&config.spring.datasource)?;
+        let inspector = database_inspector(&config.spring.datasource)?;
         let mut generated_files = Vec::new();
         for schema in &schemas {
             let database = inspector.inspect_schema(schema)?;
@@ -90,18 +90,29 @@ impl ForgeCore {
     }
 }
 
+fn database_inspector(source: &DataSourceConfig) -> Result<Box<dyn DatabaseInspector>, String> {
+    let url = source.url.trim();
+    if url.starts_with("jdbc:mysql://") {
+        return Ok(Box::new(MySqlInspector::new(source)));
+    }
+    if url.starts_with("jdbc:postgresql://") {
+        return Ok(Box::new(PostgresInspector::new(source)));
+    }
+    if url.starts_with("jdbc:oracle:") {
+        return Ok(Box::new(OracleInspector::new(source)));
+    }
+    Err("Unsupported database URL. ForgeCore currently recognizes MySQL, PostgreSQL, and Oracle JDBC URLs.".to_string())
+}
+
 struct MySqlInspector {
     source: DataSourceConfig,
 }
 
 impl MySqlInspector {
-    fn new(source: &DataSourceConfig) -> Result<Self, String> {
-        if !source.url.trim().starts_with("jdbc:mysql://") {
-            return Err("ForgeCore currently supports MySQL JDBC URLs only.".to_string());
-        }
-        Ok(Self {
+    fn new(source: &DataSourceConfig) -> Self {
+        Self {
             source: source.clone(),
-        })
+        }
     }
 
     fn pool_for_schema(&self, schema: &str) -> Result<Pool, String> {
@@ -113,6 +124,44 @@ impl MySqlInspector {
             .pass(Some(self.source.password.clone()))
             .db_name(Some(schema.to_string()));
         Pool::new(builder).map_err(|error| format!("Failed to create MySQL pool: {error}"))
+    }
+}
+
+struct PostgresInspector {
+    source: DataSourceConfig,
+}
+
+impl PostgresInspector {
+    fn new(source: &DataSourceConfig) -> Self {
+        Self {
+            source: source.clone(),
+        }
+    }
+}
+
+impl DatabaseInspector for PostgresInspector {
+    fn inspect_schema(&self, schema: &str) -> Result<DatabaseSchema, String> {
+        let _ = (&self.source, schema);
+        Err("ForgeCore PostgreSQL metadata inspection is not implemented yet.".to_string())
+    }
+}
+
+struct OracleInspector {
+    source: DataSourceConfig,
+}
+
+impl OracleInspector {
+    fn new(source: &DataSourceConfig) -> Self {
+        Self {
+            source: source.clone(),
+        }
+    }
+}
+
+impl DatabaseInspector for OracleInspector {
+    fn inspect_schema(&self, schema: &str) -> Result<DatabaseSchema, String> {
+        let _ = (&self.source, schema);
+        Err("ForgeCore Oracle metadata inspection is not implemented yet.".to_string())
     }
 }
 
@@ -599,6 +648,24 @@ mod tests {
         fs::remove_dir_all(&output_dir).expect("remove fixture output dir");
     }
 
+    #[test]
+    fn resolves_supported_database_inspectors_by_jdbc_url() {
+        assert!(database_inspector(&data_source("jdbc:mysql://127.0.0.1:3306/app")).is_ok());
+        assert!(database_inspector(&data_source("jdbc:postgresql://127.0.0.1:5432/app")).is_ok());
+        assert!(
+            database_inspector(&data_source("jdbc:oracle:thin:@//127.0.0.1:1521/XEPDB1")).is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_database_urls() {
+        let error = match database_inspector(&data_source("jdbc:sqlserver://127.0.0.1:1433")) {
+            Ok(_) => panic!("unknown database should be rejected"),
+            Err(error) => error,
+        };
+        assert!(error.contains("Unsupported database URL"));
+    }
+
     fn engine(file_type: &str) -> EngineConfig {
         EngineConfig {
             file_output_dir: String::new(),
@@ -606,6 +673,15 @@ mod tests {
             file_type: file_type.to_string(),
             produce_type: "forgecore".to_string(),
             file_name: Some("fixture-dictionary".to_string()),
+        }
+    }
+
+    fn data_source(url: &str) -> DataSourceConfig {
+        DataSourceConfig {
+            driver_class_name: String::new(),
+            url: url.to_string(),
+            username: "user".to_string(),
+            password: "password".to_string(),
         }
     }
 

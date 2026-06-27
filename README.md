@@ -10,6 +10,7 @@ The desktop shell is built with Tauri, React, and TypeScript. Document generatio
 - Generate database dictionary documents for one or more MySQL schemas
 - Support HTML, Word, and Markdown output in the Rust ForgeCore path
 - Keep the database inspector behind a Rust trait so additional databases can be added later
+- Recognize MySQL, PostgreSQL, and Oracle JDBC URLs; MySQL metadata inspection is implemented first
 - Keep configuration in memory for the current window; the app does not persist database credentials by default
 
 ## Project Structure
