@@ -9,6 +9,7 @@ The desktop shell is built with Tauri, React, and TypeScript. Document generatio
 - Configure JDBC connection information in the desktop UI
 - Generate database dictionary documents for one or more MySQL schemas
 - Support HTML, Word, and Markdown output in the Rust ForgeCore path
+- Control output language for built-in labels, currently Chinese (`zh-CN`) and English (`en-US`)
 - Keep the database inspector behind a Rust trait so additional databases can be added later
 - Recognize MySQL, PostgreSQL, and Oracle JDBC URLs; MySQL metadata inspection is implemented first
 - Keep configuration in memory for the current window; the app does not persist database credentials by default
@@ -21,6 +22,8 @@ schema-forge/
   src-tauri/            Tauri desktop shell
   src-tauri/src/forge_core/
                         Rust metadata inspector and document renderer
+  src-tauri/src/forge_core/i18n/
+                        Built-in document label language files
   config-template/      Example application.yml template
 ```
 
@@ -48,6 +51,8 @@ cd src-tauri && cargo check
 ## Configuration Behavior
 
 SchemaForge passes the UI configuration directly to the Rust ForgeCore command. ForgeCore currently supports MySQL metadata inspection and writes generated files to the configured output directory.
+
+Set `screw.engine.language` to `zh-CN` or `en-US` to control the generated document labels and table headings. Built-in label files live in `src-tauri/src/forge_core/i18n/`, so future languages can be added with the same JSON structure.
 
 It does not save database credentials or `application.yml` to a persistent file by default.
 

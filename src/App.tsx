@@ -5,6 +5,7 @@ import "./App.css";
 
 type FileType = "HTML" | "WORD" | "MD";
 type ProduceType = "freemarker" | "velocity";
+type OutputLanguage = "zh-CN" | "en-US";
 type AppConfig = {
   spring: {
     datasource: {
@@ -21,6 +22,7 @@ type AppConfig = {
       "open-output-dir": boolean;
       "file-type": FileType;
       "produce-type": ProduceType;
+      language: OutputLanguage;
       "file-name"?: string;
     };
   };
@@ -37,6 +39,7 @@ function App() {
   const [openOutputDir, setOpenOutputDir] = useState(true);
   const [fileType, setFileType] = useState<FileType>("HTML");
   const [produceType, setProduceType] = useState<ProduceType>("freemarker");
+  const [language, setLanguage] = useState<OutputLanguage>("zh-CN");
   const [fileName, setFileName] = useState("");
   const [status, setStatus] = useState("配置仅保留在当前窗口");
 
@@ -55,6 +58,7 @@ function App() {
       "open-output-dir": openOutputDir,
       "file-type": fileType,
       "produce-type": produceType,
+      language,
     };
     if (fileName.trim()) {
       engine["file-name"] = fileName.trim();
@@ -77,6 +81,7 @@ function App() {
     fileName,
     fileType,
     jdbcUrl,
+    language,
     openOutputDir,
     outputDir,
     password,
@@ -131,8 +136,8 @@ function App() {
             <p>文件类型</p>
           </div>
           <div>
-            <span>{produceType}</span>
-            <p>模板引擎</p>
+            <span>{language === "zh-CN" ? "中文" : "EN"}</span>
+            <p>输出语言</p>
           </div>
           <div>
             <span>{openOutputDir ? "ON" : "OFF"}</span>
@@ -209,7 +214,7 @@ function App() {
                   onChange={(event) => setOutputDir(event.currentTarget.value)}
                 />
               </label>
-              <div className="three-column">
+              <div className="settings-grid">
                 <label>
                   <span>文件类型</span>
                   <select
@@ -233,6 +238,18 @@ function App() {
                   >
                     <option value="freemarker">freemarker</option>
                     <option value="velocity">velocity</option>
+                  </select>
+                </label>
+                <label>
+                  <span>输出语言</span>
+                  <select
+                    value={language}
+                    onChange={(event) =>
+                      setLanguage(event.currentTarget.value as OutputLanguage)
+                    }
+                  >
+                    <option value="zh-CN">中文</option>
+                    <option value="en-US">English</option>
                   </select>
                 </label>
                 <label>
@@ -272,6 +289,10 @@ function App() {
                 <div>
                   <span>模板引擎</span>
                   <strong>{produceType}</strong>
+                </div>
+                <div>
+                  <span>输出语言</span>
+                  <strong>{language === "zh-CN" ? "中文" : "English"}</strong>
                 </div>
                 <div>
                   <span>文件名</span>

@@ -39,6 +39,8 @@ struct EngineConfig {
     file_type: String,
     #[serde(rename = "produce-type")]
     produce_type: String,
+    #[serde(rename = "language")]
+    language: Option<String>,
     #[serde(rename = "file-name")]
     file_name: Option<String>,
 }

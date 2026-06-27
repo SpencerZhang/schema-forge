@@ -1,6 +1,10 @@
 use crate::{AppConfig, DataSourceConfig, EngineConfig};
-use docx_rs::{Docx, Paragraph, Run, Table as DocxTable, TableCell, TableRow};
+use docx_rs::{
+    Docx, Paragraph, Run, Shading, ShdType, Table as DocxTable, TableCell, TableLayoutType,
+    TableRow, WidthType,
+};
 use mysql::{params, prelude::Queryable, OptsBuilder, Pool};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
@@ -327,6 +331,7 @@ fn render_schema(
     output_dir: &str,
 ) -> Result<PathBuf, String> {
     let file_type = engine.file_type.trim().to_ascii_uppercase();
+    let labels = Labels::from_engine(engine)?;
     let base_name = engine
         .file_name
         .as_deref()
@@ -334,9 +339,19 @@ fn render_schema(
         .filter(|name| !name.is_empty())
         .unwrap_or(&database.name);
     match file_type.as_str() {
-        "HTML" => write_file(output_dir, base_name, "html", &render_html(database)),
-        "MD" => write_file(output_dir, base_name, "md", &render_markdown(database)),
-        "WORD" => write_docx(output_dir, base_name, database),
+        "HTML" => write_file(
+            output_dir,
+            base_name,
+            "html",
+            &render_html(database, labels),
+        ),
+        "MD" => write_file(
+            output_dir,
+            base_name,
+            "md",
+            &render_markdown(database, labels),
+        ),
+        "WORD" => write_docx(output_dir, base_name, database, labels),
         _ => Err(format!("Unsupported file type: {}", engine.file_type)),
     }
 }
@@ -357,47 +372,155 @@ fn write_docx(
     output_dir: &str,
     base_name: &str,
     database: &DatabaseSchema,
+    labels: Labels,
 ) -> Result<PathBuf, String> {
     let path = Path::new(output_dir).join(format!("{}.docx", safe_file_name(base_name)));
     let file = File::create(&path)
         .map_err(|error| format!("Failed to create {}: {error}", path.display()))?;
-    render_docx(database)
+    render_docx(database, labels)
         .build()
         .pack(file)
         .map_err(|error| format!("Failed to write {}: {error}", path.display()))?;
     Ok(path)
 }
 
-fn render_markdown(database: &DatabaseSchema) -> String {
-    let mut md = format!("# Database Dictionary: {}\n\n", database.name);
-    for table in &database.tables {
-        md.push_str(&format!("## `{}`\n\n", table.name));
-        if !table.comment.is_empty() {
-            md.push_str(&format!("{}\n\n", table.comment));
+const ZH_CN_LABELS: &str = include_str!("i18n/zh-CN.json");
+const EN_US_LABELS: &str = include_str!("i18n/en-US.json");
+const DOC_PRIMARY_COLOR: &str = "17664C";
+const DOC_TEXT_COLOR: &str = "17201C";
+const DOC_MUTED_COLOR: &str = "68756D";
+const DOC_HEADER_FILL: &str = "E7F0EB";
+
+#[derive(Clone, Deserialize)]
+struct Labels {
+    html_lang: String,
+    doc_title: String,
+    database_name: String,
+    document_version: String,
+    document_description: String,
+    table_directory: String,
+    sequence: String,
+    table_name: String,
+    description: String,
+    back_to_index: String,
+    data_columns: String,
+    column_name: String,
+    data_type: String,
+    nullable: String,
+    primary_key: String,
+    default_value: String,
+    extra: String,
+    indexes: String,
+    index_name: String,
+    unique: String,
+    columns: String,
+    yes: String,
+    no: String,
+}
+
+impl Labels {
+    fn from_engine(engine: &EngineConfig) -> Result<Self, String> {
+        let language = engine
+            .language
+            .as_deref()
+            .unwrap_or("zh-CN")
+            .trim()
+            .to_ascii_lowercase();
+        let raw = match language.as_str() {
+            "en" | "en-us" => EN_US_LABELS,
+            "zh" | "zh-cn" => ZH_CN_LABELS,
+            _ => ZH_CN_LABELS,
+        };
+        serde_json::from_str(raw).map_err(|error| format!("Invalid i18n labels: {error}"))
+    }
+
+    fn bool(&self, value: bool) -> &str {
+        if value {
+            &self.yes
+        } else {
+            &self.no
         }
-        md.push_str("| Column | Type | Nullable | Key | Default | Extra | Comment |\n");
-        md.push_str("| --- | --- | --- | --- | --- | --- | --- |\n");
-        for column in &table.columns {
+    }
+}
+
+fn render_markdown(database: &DatabaseSchema, labels: Labels) -> String {
+    let mut md = format!("<a id=\"index\"></a>\n\n# {}\n\n", labels.doc_title);
+    md.push_str(&format!(
+        "{}: `{}`\n\n",
+        labels.database_name, database.name
+    ));
+    md.push_str(&format!("{}: 1.0.0\n\n", labels.document_version));
+    md.push_str(&format!(
+        "{}: Database design document\n\n",
+        labels.document_description
+    ));
+    md.push_str("---\n\n");
+    md.push_str(&format!("## {}\n\n", labels.table_directory));
+    md.push_str(&format!(
+        "| {} | {} | {} |\n",
+        labels.sequence, labels.table_name, labels.description
+    ));
+    md.push_str("| --- | --- | --- |\n");
+    for (index, table) in database.tables.iter().enumerate() {
+        md.push_str(&format!(
+            "| {} | [`{}`](#{}) | {} |\n",
+            index + 1,
+            table.name,
+            anchor_name(&table.name),
+            markdown_cell(&table.comment)
+        ));
+    }
+    md.push('\n');
+
+    for table in &database.tables {
+        md.push_str(&format!(
+            "---\n\n<a id=\"{}\"></a>\n\n## {}: `{}`\n\n",
+            anchor_name(&table.name),
+            labels.table_name,
+            table.name
+        ));
+        md.push_str(&format!("[{}](#index)\n\n", labels.back_to_index));
+        if !table.comment.is_empty() {
+            md.push_str(&format!("{}: {}\n\n", labels.description, table.comment));
+        }
+        md.push_str(&format!("### {}\n\n", labels.data_columns));
+        md.push_str(&format!(
+            "| {} | {} | {} | {} | {} | {} | {} | {} |\n",
+            labels.sequence,
+            labels.column_name,
+            labels.data_type,
+            labels.nullable,
+            labels.primary_key,
+            labels.default_value,
+            labels.extra,
+            labels.description
+        ));
+        md.push_str("| --- | --- | --- | --- | --- | --- | --- | --- |\n");
+        for (index, column) in table.columns.iter().enumerate() {
             md.push_str(&format!(
-                "| `{}` | `{}` | {} | {} | {} | {} | {} |\n",
+                "| {} | `{}` | `{}` | {} | {} | {} | {} | {} |\n",
+                index + 1,
                 column.name,
                 column.data_type,
-                yes_no(column.nullable),
-                markdown_cell(&column.key),
+                labels.bool(column.nullable),
+                labels.bool(is_primary_key(&column.key)),
                 markdown_cell(&column.default_value),
                 markdown_cell(&column.extra),
                 markdown_cell(&column.comment)
             ));
         }
         if !table.indexes.is_empty() {
-            md.push_str("\n**Indexes**\n\n");
-            md.push_str("| Name | Unique | Columns |\n");
+            md.push_str(&format!("\n### {}\n\n", labels.indexes));
+            md.push_str(&format!(
+                "| {} | {} | {} |\n",
+                labels.index_name, labels.unique, labels.columns
+            ));
             md.push_str("| --- | --- | --- |\n");
             for index in &table.indexes {
                 md.push_str(&format!(
                     "| `{}` | {} | {} |\n",
                     index.name,
-                    yes_no(index.unique),
+                    labels.bool(index.unique),
                     index.columns.join(", ")
                 ));
             }
@@ -407,46 +530,115 @@ fn render_markdown(database: &DatabaseSchema) -> String {
     md
 }
 
-fn render_html(database: &DatabaseSchema) -> String {
+fn render_html(database: &DatabaseSchema, labels: Labels) -> String {
     let mut html = format!(
         r#"<!doctype html>
-<html lang="en">
+<html lang="{}">
 <head>
   <meta charset="utf-8">
-  <title>Database Dictionary - {}</title>
+  <title>{} - {}</title>
   <style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17201c; margin: 32px; }}
-    h1 {{ margin-bottom: 24px; }}
-    h2 {{ border-bottom: 1px solid #d7dfda; padding-bottom: 8px; margin-top: 32px; }}
-    table {{ border-collapse: collapse; width: 100%; margin: 12px 0 24px; }}
-    th, td {{ border: 1px solid #d7dfda; padding: 8px 10px; text-align: left; vertical-align: top; }}
-    th {{ background: #edf4ef; }}
-    code {{ background: #edf4ef; border-radius: 4px; padding: 1px 4px; }}
+    :root {{ color-scheme: light; }}
+    body {{ background: #f3f6f4; color: #17201c; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; line-height: 1.55; margin: 0; }}
+    .page {{ margin: 0 auto; max-width: 1180px; padding: 36px 32px 56px; }}
+    .doc-header {{ background: #ffffff; border: 1px solid #d7dfda; border-radius: 8px; padding: 24px 28px; }}
+    h1 {{ font-size: 30px; line-height: 1.2; margin: 0 0 18px; }}
+    h2 {{ border-bottom: 2px solid #17664c; font-size: 22px; margin: 34px 0 12px; padding-bottom: 8px; }}
+    h3 {{ font-size: 17px; margin: 20px 0 10px; }}
+    .meta {{ display: grid; gap: 8px; margin: 0; }}
+    .meta div {{ display: grid; gap: 8px; grid-template-columns: 120px minmax(0, 1fr); }}
+    .meta dt {{ color: #5f7067; font-weight: 700; }}
+    .meta dd {{ margin: 0; overflow-wrap: anywhere; }}
+    .section {{ background: #ffffff; border: 1px solid #d7dfda; border-radius: 8px; margin-top: 22px; padding: 20px 22px; }}
+    .section-title {{ align-items: baseline; display: flex; gap: 12px; justify-content: space-between; }}
+    .back-link {{ color: #17664c; font-size: 13px; font-weight: 700; text-decoration: none; }}
+    table {{ border-collapse: collapse; width: 100%; margin: 12px 0 22px; table-layout: fixed; }}
+    th, td {{ border: 1px solid #ccd8d1; padding: 9px 10px; text-align: left; vertical-align: top; word-break: break-word; }}
+    th {{ background: #e7f0eb; color: #163d2f; font-weight: 800; }}
+    tbody tr:nth-child(even) {{ background: #f8faf9; }}
+    code {{ background: #edf4ef; border-radius: 4px; color: #123a2c; padding: 1px 4px; }}
     .muted {{ color: #68756d; }}
+    .num {{ width: 58px; }}
+    .name {{ width: 20%; }}
+    .type {{ width: 18%; }}
+    .flag {{ width: 90px; }}
+    @media print {{ body {{ background: #ffffff; }} .page {{ max-width: none; padding: 0; }} .doc-header, .section {{ border: 0; }} }}
   </style>
 </head>
 <body>
-  <h1>Database Dictionary: {}</h1>
+  <main class="page">
+    <header class="doc-header">
+      <h1>{}</h1>
+      <dl class="meta">
+        <div><dt>{}</dt><dd><code>{}</code></dd></div>
+        <div><dt>{}</dt><dd>1.0.0</dd></div>
+        <div><dt>{}</dt><dd>Database design document</dd></div>
+      </dl>
+    </header>
+    <section class="section" id="index">
+      <h2>{}</h2>
+      <table>
+        <thead><tr><th class="num">{}</th><th>{}</th><th>{}</th></tr></thead>
+        <tbody>
 "#,
+        labels.html_lang,
+        escape_html(&labels.doc_title),
         escape_html(&database.name),
-        escape_html(&database.name)
+        escape_html(&labels.doc_title),
+        escape_html(&labels.database_name),
+        escape_html(&database.name),
+        escape_html(&labels.document_version),
+        escape_html(&labels.document_description),
+        escape_html(&labels.table_directory),
+        escape_html(&labels.sequence),
+        escape_html(&labels.table_name),
+        escape_html(&labels.description),
     );
+    for (index, table) in database.tables.iter().enumerate() {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td><a href=\"#{}\"><code>{}</code></a></td><td>{}</td></tr>\n",
+            index + 1,
+            anchor_name(&table.name),
+            escape_html(&table.name),
+            escape_html(&table.comment)
+        ));
+    }
+    html.push_str("        </tbody>\n      </table>\n    </section>\n");
     for table in &database.tables {
         html.push_str(&format!(
-            "<h2><code>{}</code></h2>\n",
-            escape_html(&table.name)
+            "<section class=\"section\" id=\"{}\">\n  <div class=\"section-title\"><h2>{}: <code>{}</code></h2><a class=\"back-link\" href=\"#index\">{}</a></div>\n",
+            anchor_name(&table.name),
+            escape_html(&labels.table_name),
+            escape_html(&table.name),
+            escape_html(&labels.back_to_index)
         ));
         if !table.comment.is_empty() {
-            html.push_str(&format!("<p>{}</p>\n", escape_html(&table.comment)));
-        }
-        html.push_str("<table><thead><tr><th>Column</th><th>Type</th><th>Nullable</th><th>Key</th><th>Default</th><th>Extra</th><th>Comment</th></tr></thead><tbody>\n");
-        for column in &table.columns {
             html.push_str(&format!(
-                "<tr><td><code>{}</code></td><td><code>{}</code></td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+                "<p><strong>{}:</strong> {}</p>\n",
+                escape_html(&labels.description),
+                escape_html(&table.comment)
+            ));
+        }
+        html.push_str(&format!(
+            "<h3>{}</h3><table><thead><tr><th class=\"num\">{}</th><th class=\"name\">{}</th><th class=\"type\">{}</th><th class=\"flag\">{}</th><th class=\"flag\">{}</th><th>{}</th><th>{}</th><th>{}</th></tr></thead><tbody>\n",
+            escape_html(&labels.data_columns),
+            escape_html(&labels.sequence),
+            escape_html(&labels.column_name),
+            escape_html(&labels.data_type),
+            escape_html(&labels.nullable),
+            escape_html(&labels.primary_key),
+            escape_html(&labels.default_value),
+            escape_html(&labels.extra),
+            escape_html(&labels.description)
+        ));
+        for (index, column) in table.columns.iter().enumerate() {
+            html.push_str(&format!(
+                "<tr><td>{}</td><td><code>{}</code></td><td><code>{}</code></td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+                index + 1,
                 escape_html(&column.name),
                 escape_html(&column.data_type),
-                yes_no(column.nullable),
-                escape_html(&column.key),
+                labels.bool(column.nullable),
+                labels.bool(is_primary_key(&column.key)),
                 escape_html(&column.default_value),
                 escape_html(&column.extra),
                 escape_html(&column.comment)
@@ -454,86 +646,223 @@ fn render_html(database: &DatabaseSchema) -> String {
         }
         html.push_str("</tbody></table>\n");
         if !table.indexes.is_empty() {
-            html.push_str("<h3>Indexes</h3><table><thead><tr><th>Name</th><th>Unique</th><th>Columns</th></tr></thead><tbody>\n");
+            html.push_str(&format!(
+                "<h3>{}</h3><table><thead><tr><th>{}</th><th>{}</th><th>{}</th></tr></thead><tbody>\n",
+                escape_html(&labels.indexes),
+                escape_html(&labels.index_name),
+                escape_html(&labels.unique),
+                escape_html(&labels.columns)
+            ));
             for index in &table.indexes {
                 html.push_str(&format!(
                     "<tr><td><code>{}</code></td><td>{}</td><td>{}</td></tr>\n",
                     escape_html(&index.name),
-                    yes_no(index.unique),
+                    labels.bool(index.unique),
                     escape_html(&index.columns.join(", "))
                 ));
             }
             html.push_str("</tbody></table>\n");
         }
+        html.push_str("</section>\n");
     }
-    html.push_str("</body>\n</html>\n");
+    html.push_str("  </main>\n</body>\n</html>\n");
     html
 }
 
-fn render_docx(database: &DatabaseSchema) -> Docx {
-    let mut doc = Docx::new().add_paragraph(heading(
-        &format!("Database Dictionary: {}", database.name),
-        32,
-    ));
+fn render_docx(database: &DatabaseSchema, labels: Labels) -> Docx {
+    let mut doc = Docx::new()
+        .add_paragraph(title_heading(&labels.doc_title))
+        .add_table(meta_docx_table(database, &labels))
+        .add_paragraph(section_heading(&labels.table_directory))
+        .add_table(directory_docx_table(database, &labels));
     for table in &database.tables {
-        doc = doc.add_paragraph(heading(&table.name, 24));
+        doc = doc.add_paragraph(section_heading(&format!(
+            "{}: {}",
+            labels.table_name, table.name
+        )));
         if !table.comment.is_empty() {
-            doc = doc.add_paragraph(paragraph(&table.comment));
+            doc = doc.add_paragraph(paragraph(&format!(
+                "{}: {}",
+                labels.description, table.comment
+            )));
         }
-        doc = doc.add_table(column_docx_table(table));
+        doc = doc
+            .add_paragraph(subsection_heading(&labels.data_columns))
+            .add_table(column_docx_table(table, &labels));
         if !table.indexes.is_empty() {
             doc = doc
-                .add_paragraph(heading("Indexes", 20))
-                .add_table(index_docx_table(table));
+                .add_paragraph(subsection_heading(&labels.indexes))
+                .add_table(index_docx_table(table, &labels));
         }
     }
     doc
 }
 
-fn column_docx_table(table: &Table) -> DocxTable {
-    let mut rows = vec![docx_row(&[
-        "Column", "Type", "Nullable", "Key", "Default", "Extra", "Comment",
-    ])];
-    for column in &table.columns {
-        rows.push(docx_row(&[
-            &column.name,
-            &column.data_type,
-            yes_no(column.nullable),
-            &column.key,
-            &column.default_value,
-            &column.extra,
-            &column.comment,
-        ]));
-    }
-    DocxTable::new(rows)
+fn meta_docx_table(database: &DatabaseSchema, labels: &Labels) -> DocxTable {
+    styled_docx_table(vec![
+        docx_row(
+            vec![labels.database_name.to_string(), database.name.clone()],
+            false,
+        ),
+        docx_row(
+            vec![labels.document_version.to_string(), "1.0.0".to_string()],
+            false,
+        ),
+        docx_row(
+            vec![
+                labels.document_description.to_string(),
+                "Database design document".to_string(),
+            ],
+            false,
+        ),
+    ])
 }
 
-fn index_docx_table(table: &Table) -> DocxTable {
-    let mut rows = vec![docx_row(&["Name", "Unique", "Columns"])];
+fn directory_docx_table(database: &DatabaseSchema, labels: &Labels) -> DocxTable {
+    let mut rows = vec![docx_row(
+        vec![
+            labels.sequence.to_string(),
+            labels.table_name.to_string(),
+            labels.description.to_string(),
+        ],
+        true,
+    )];
+    for (index, table) in database.tables.iter().enumerate() {
+        rows.push(docx_row(
+            vec![
+                (index + 1).to_string(),
+                table.name.clone(),
+                table.comment.clone(),
+            ],
+            false,
+        ));
+    }
+    styled_docx_table(rows)
+}
+
+fn column_docx_table(table: &Table, labels: &Labels) -> DocxTable {
+    let mut rows = vec![docx_row(
+        vec![
+            labels.sequence.to_string(),
+            labels.column_name.to_string(),
+            labels.data_type.to_string(),
+            labels.nullable.to_string(),
+            labels.primary_key.to_string(),
+            labels.default_value.to_string(),
+            labels.extra.to_string(),
+            labels.description.to_string(),
+        ],
+        true,
+    )];
+    for (index, column) in table.columns.iter().enumerate() {
+        rows.push(docx_row(
+            vec![
+                (index + 1).to_string(),
+                column.name.clone(),
+                column.data_type.clone(),
+                labels.bool(column.nullable).to_string(),
+                labels.bool(is_primary_key(&column.key)).to_string(),
+                column.default_value.clone(),
+                column.extra.clone(),
+                column.comment.clone(),
+            ],
+            false,
+        ));
+    }
+    styled_docx_table(rows)
+}
+
+fn index_docx_table(table: &Table, labels: &Labels) -> DocxTable {
+    let mut rows = vec![docx_row(
+        vec![
+            labels.index_name.to_string(),
+            labels.unique.to_string(),
+            labels.columns.to_string(),
+        ],
+        true,
+    )];
     for index in &table.indexes {
-        rows.push(docx_row(&[
-            &index.name,
-            yes_no(index.unique),
-            &index.columns.join(", "),
-        ]));
+        rows.push(docx_row(
+            vec![
+                index.name.clone(),
+                labels.bool(index.unique).to_string(),
+                index.columns.join(", "),
+            ],
+            false,
+        ));
     }
+    styled_docx_table(rows)
+}
+
+fn styled_docx_table(rows: Vec<TableRow>) -> DocxTable {
     DocxTable::new(rows)
+        .width(5000, WidthType::Pct)
+        .layout(TableLayoutType::Autofit)
 }
 
-fn docx_row(values: &[&str]) -> TableRow {
-    TableRow::new(values.iter().map(|value| docx_cell(value)).collect())
+fn docx_row(values: Vec<String>, header: bool) -> TableRow {
+    TableRow::new(
+        values
+            .iter()
+            .map(|value| docx_cell(value, header))
+            .collect(),
+    )
 }
 
-fn docx_cell(value: &str) -> TableCell {
-    TableCell::new().add_paragraph(paragraph(value))
+fn docx_cell(value: &str, header: bool) -> TableCell {
+    let run = if header {
+        Run::new()
+            .add_text(value)
+            .bold()
+            .size(20)
+            .color(DOC_PRIMARY_COLOR)
+    } else {
+        Run::new().add_text(value).size(19).color(DOC_TEXT_COLOR)
+    };
+    let cell = TableCell::new().add_paragraph(Paragraph::new().add_run(run));
+    if header {
+        cell.shading(
+            Shading::new()
+                .shd_type(ShdType::Clear)
+                .fill(DOC_HEADER_FILL),
+        )
+    } else {
+        cell
+    }
 }
 
-fn heading(value: &str, size: usize) -> Paragraph {
-    Paragraph::new().add_run(Run::new().add_text(value).bold().size(size))
+fn title_heading(value: &str) -> Paragraph {
+    Paragraph::new().add_run(
+        Run::new()
+            .add_text(value)
+            .bold()
+            .size(32)
+            .color(DOC_PRIMARY_COLOR),
+    )
+}
+
+fn section_heading(value: &str) -> Paragraph {
+    Paragraph::new().add_run(
+        Run::new()
+            .add_text(value)
+            .bold()
+            .size(24)
+            .color(DOC_PRIMARY_COLOR),
+    )
+}
+
+fn subsection_heading(value: &str) -> Paragraph {
+    Paragraph::new().add_run(
+        Run::new()
+            .add_text(value)
+            .bold()
+            .size(20)
+            .color(DOC_TEXT_COLOR),
+    )
 }
 
 fn paragraph(value: &str) -> Paragraph {
-    Paragraph::new().add_run(Run::new().add_text(value))
+    Paragraph::new().add_run(Run::new().add_text(value).size(20).color(DOC_MUTED_COLOR))
 }
 
 fn safe_file_name(value: &str) -> String {
@@ -544,6 +873,20 @@ fn safe_file_name(value: &str) -> String {
             _ => ch,
         })
         .collect()
+}
+
+fn anchor_name(value: &str) -> String {
+    format!(
+        "table-{}",
+        safe_file_name(value)
+            .trim()
+            .replace([' ', '.'], "-")
+            .to_ascii_lowercase()
+    )
+}
+
+fn is_primary_key(value: &str) -> bool {
+    value.eq_ignore_ascii_case("PRI")
 }
 
 fn markdown_cell(value: &str) -> String {
@@ -560,14 +903,6 @@ fn escape_html(value: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
-}
-
-fn yes_no(value: bool) -> &'static str {
-    if value {
-        "YES"
-    } else {
-        "NO"
-    }
 }
 
 fn open_path(path: &Path) -> Result<(), String> {
@@ -628,15 +963,17 @@ mod tests {
         let html_path = render_schema(&schema, &engine("HTML"), output_dir.to_str().unwrap())
             .expect("render html fixture");
         let html = fs::read_to_string(&html_path).expect("read html fixture");
-        assert!(html.contains("Database Dictionary: fixture_schema"));
+        assert!(html.contains("数据库设计文档"));
+        assert!(html.contains("表清单"));
         assert!(html.contains("<code>users</code>"));
         assert!(html.contains("User display name"));
 
         let md_path = render_schema(&schema, &engine("MD"), output_dir.to_str().unwrap())
             .expect("render markdown fixture");
         let markdown = fs::read_to_string(&md_path).expect("read markdown fixture");
-        assert!(markdown.contains("# Database Dictionary: fixture_schema"));
-        assert!(markdown.contains("| `display_name` | `varchar(120)` | YES |"));
+        assert!(markdown.contains("# 数据库设计文档"));
+        assert!(markdown.contains("| 序号 | 表名 | 说明 |"));
+        assert!(markdown.contains("| 2 | `display_name` | `varchar(120)` | Y | N |"));
         assert!(markdown.contains("idx_users_email"));
 
         let docx_path = render_schema(&schema, &engine("WORD"), output_dir.to_str().unwrap())
@@ -644,6 +981,26 @@ mod tests {
         let docx = fs::read(&docx_path).expect("read docx fixture");
         assert!(docx.len() > 100);
         assert_eq!(&docx[0..2], b"PK");
+
+        fs::remove_dir_all(&output_dir).expect("remove fixture output dir");
+    }
+
+    #[test]
+    fn renders_english_labels_when_requested() {
+        let output_dir = temp_output_dir();
+        fs::create_dir_all(&output_dir).expect("create fixture output dir");
+        let schema = fixture_schema();
+
+        let markdown_path = render_schema(
+            &schema,
+            &engine_with_language("MD", "en-US"),
+            output_dir.to_str().unwrap(),
+        )
+        .expect("render english markdown fixture");
+        let markdown = fs::read_to_string(&markdown_path).expect("read markdown fixture");
+        assert!(markdown.contains("# Database Dictionary"));
+        assert!(markdown.contains("| No. | Table | Description |"));
+        assert!(markdown.contains("| 1 | `id` | `bigint` | NO | YES |"));
 
         fs::remove_dir_all(&output_dir).expect("remove fixture output dir");
     }
@@ -667,11 +1024,16 @@ mod tests {
     }
 
     fn engine(file_type: &str) -> EngineConfig {
+        engine_with_language(file_type, "zh-CN")
+    }
+
+    fn engine_with_language(file_type: &str, language: &str) -> EngineConfig {
         EngineConfig {
             file_output_dir: String::new(),
             open_output_dir: false,
             file_type: file_type.to_string(),
             produce_type: "forgecore".to_string(),
+            language: Some(language.to_string()),
             file_name: Some("fixture-dictionary".to_string()),
         }
     }

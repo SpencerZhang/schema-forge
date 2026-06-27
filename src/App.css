@@ -258,10 +258,10 @@ textarea:focus {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.three-column {
+.settings-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: 0.72fr 1fr 1fr;
+  grid-template-columns: 0.72fr 1fr 1fr 1fr;
 }
 
 .switch-row {
@@ -348,7 +348,7 @@ textarea:focus {
   .summary-strip,
   .side-panel,
   .two-column,
-  .three-column {
+  .settings-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
