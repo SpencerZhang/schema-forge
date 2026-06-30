@@ -67,4 +67,4 @@ SchemaForge is released under the MIT License. See [LICENSE](LICENSE).
 - TypeScript
 - Rust
 - ForgeCore
-- `mysql`
+- `MySQL`
