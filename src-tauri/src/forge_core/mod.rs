@@ -1,7 +1,8 @@
 use crate::{AppConfig, DataSourceConfig, EngineConfig};
 use docx_rs::{
-    Docx, Paragraph, Run, Shading, ShdType, Table as DocxTable, TableCell, TableLayoutType,
-    TableRow, WidthType,
+    BorderType, Docx, LineSpacing, PageMargin, PageOrientationType, Paragraph, Run, Shading,
+    ShdType, Table as DocxTable, TableBorder, TableBorderPosition, TableBorders, TableCell,
+    TableCellMargins, TableLayoutType, TableRow, WidthType,
 };
 use mysql::{params, prelude::Queryable, OptsBuilder, Pool};
 use serde::Deserialize;
@@ -390,6 +391,14 @@ const DOC_PRIMARY_COLOR: &str = "17664C";
 const DOC_TEXT_COLOR: &str = "17201C";
 const DOC_MUTED_COLOR: &str = "68756D";
 const DOC_HEADER_FILL: &str = "E7F0EB";
+const DOC_BORDER_COLOR: &str = "CCD8D1";
+const DOC_PAGE_WIDTH_LANDSCAPE: u32 = 16838;
+const DOC_PAGE_HEIGHT_LANDSCAPE: u32 = 11906;
+const DOC_TABLE_WIDTH_DXA: usize = 15360;
+const DOC_META_WIDTHS: [usize; 2] = [2200, 13160];
+const DOC_DIRECTORY_WIDTHS: [usize; 3] = [700, 5200, 9460];
+const DOC_COLUMN_WIDTHS: [usize; 8] = [520, 2200, 1900, 900, 760, 1500, 1600, 5980];
+const DOC_INDEX_WIDTHS: [usize; 3] = [4200, 1200, 9960];
 
 #[derive(Clone, Deserialize)]
 struct Labels {
@@ -671,10 +680,15 @@ fn render_html(database: &DatabaseSchema, labels: Labels) -> String {
 
 fn render_docx(database: &DatabaseSchema, labels: Labels) -> Docx {
     let mut doc = Docx::new()
+        .page_size(DOC_PAGE_WIDTH_LANDSCAPE, DOC_PAGE_HEIGHT_LANDSCAPE)
+        .page_orient(PageOrientationType::Landscape)
+        .page_margin(compact_page_margin())
         .add_paragraph(title_heading(&labels.doc_title))
         .add_table(meta_docx_table(database, &labels))
+        .add_paragraph(spacer_paragraph(180))
         .add_paragraph(section_heading(&labels.table_directory))
-        .add_table(directory_docx_table(database, &labels));
+        .add_table(directory_docx_table(database, &labels))
+        .add_paragraph(spacer_paragraph(260));
     for table in &database.tables {
         doc = doc.add_paragraph(section_heading(&format!(
             "{}: {}",
@@ -688,34 +702,44 @@ fn render_docx(database: &DatabaseSchema, labels: Labels) -> Docx {
         }
         doc = doc
             .add_paragraph(subsection_heading(&labels.data_columns))
-            .add_table(column_docx_table(table, &labels));
+            .add_table(column_docx_table(table, &labels))
+            .add_paragraph(spacer_paragraph(160));
         if !table.indexes.is_empty() {
             doc = doc
                 .add_paragraph(subsection_heading(&labels.indexes))
-                .add_table(index_docx_table(table, &labels));
+                .add_table(index_docx_table(table, &labels))
+                .add_paragraph(spacer_paragraph(260));
+        } else {
+            doc = doc.add_paragraph(spacer_paragraph(160));
         }
     }
     doc
 }
 
 fn meta_docx_table(database: &DatabaseSchema, labels: &Labels) -> DocxTable {
-    styled_docx_table(vec![
-        docx_row(
-            vec![labels.database_name.to_string(), database.name.clone()],
-            false,
-        ),
-        docx_row(
-            vec![labels.document_version.to_string(), "1.0.0".to_string()],
-            false,
-        ),
-        docx_row(
-            vec![
-                labels.document_description.to_string(),
-                "Database design document".to_string(),
-            ],
-            false,
-        ),
-    ])
+    styled_docx_table(
+        vec![
+            docx_row(
+                vec![labels.database_name.to_string(), database.name.clone()],
+                false,
+                &DOC_META_WIDTHS,
+            ),
+            docx_row(
+                vec![labels.document_version.to_string(), "1.0.0".to_string()],
+                false,
+                &DOC_META_WIDTHS,
+            ),
+            docx_row(
+                vec![
+                    labels.document_description.to_string(),
+                    "Database design document".to_string(),
+                ],
+                false,
+                &DOC_META_WIDTHS,
+            ),
+        ],
+        &DOC_META_WIDTHS,
+    )
 }
 
 fn directory_docx_table(database: &DatabaseSchema, labels: &Labels) -> DocxTable {
@@ -726,6 +750,7 @@ fn directory_docx_table(database: &DatabaseSchema, labels: &Labels) -> DocxTable
             labels.description.to_string(),
         ],
         true,
+        &DOC_DIRECTORY_WIDTHS,
     )];
     for (index, table) in database.tables.iter().enumerate() {
         rows.push(docx_row(
@@ -735,9 +760,10 @@ fn directory_docx_table(database: &DatabaseSchema, labels: &Labels) -> DocxTable
                 table.comment.clone(),
             ],
             false,
+            &DOC_DIRECTORY_WIDTHS,
         ));
     }
-    styled_docx_table(rows)
+    styled_docx_table(rows, &DOC_DIRECTORY_WIDTHS)
 }
 
 fn column_docx_table(table: &Table, labels: &Labels) -> DocxTable {
@@ -753,6 +779,7 @@ fn column_docx_table(table: &Table, labels: &Labels) -> DocxTable {
             labels.description.to_string(),
         ],
         true,
+        &DOC_COLUMN_WIDTHS,
     )];
     for (index, column) in table.columns.iter().enumerate() {
         rows.push(docx_row(
@@ -767,9 +794,10 @@ fn column_docx_table(table: &Table, labels: &Labels) -> DocxTable {
                 column.comment.clone(),
             ],
             false,
+            &DOC_COLUMN_WIDTHS,
         ));
     }
-    styled_docx_table(rows)
+    styled_docx_table(rows, &DOC_COLUMN_WIDTHS)
 }
 
 fn index_docx_table(table: &Table, labels: &Labels) -> DocxTable {
@@ -780,6 +808,7 @@ fn index_docx_table(table: &Table, labels: &Labels) -> DocxTable {
             labels.columns.to_string(),
         ],
         true,
+        &DOC_INDEX_WIDTHS,
     )];
     for index in &table.indexes {
         rows.push(docx_row(
@@ -789,37 +818,45 @@ fn index_docx_table(table: &Table, labels: &Labels) -> DocxTable {
                 index.columns.join(", "),
             ],
             false,
+            &DOC_INDEX_WIDTHS,
         ));
     }
-    styled_docx_table(rows)
+    styled_docx_table(rows, &DOC_INDEX_WIDTHS)
 }
 
-fn styled_docx_table(rows: Vec<TableRow>) -> DocxTable {
+fn styled_docx_table(rows: Vec<TableRow>, widths: &[usize]) -> DocxTable {
     DocxTable::new(rows)
-        .width(5000, WidthType::Pct)
-        .layout(TableLayoutType::Autofit)
+        .width(DOC_TABLE_WIDTH_DXA, WidthType::Dxa)
+        .layout(TableLayoutType::Fixed)
+        .set_grid(widths.to_vec())
+        .margins(TableCellMargins::new().margin(70, 80, 70, 80))
+        .set_borders(light_table_borders())
 }
 
-fn docx_row(values: Vec<String>, header: bool) -> TableRow {
+fn docx_row(values: Vec<String>, header: bool, widths: &[usize]) -> TableRow {
     TableRow::new(
         values
             .iter()
-            .map(|value| docx_cell(value, header))
+            .enumerate()
+            .map(|(index, value)| docx_cell(value, header, widths.get(index).copied()))
             .collect(),
     )
 }
 
-fn docx_cell(value: &str, header: bool) -> TableCell {
+fn docx_cell(value: &str, header: bool, width: Option<usize>) -> TableCell {
     let run = if header {
         Run::new()
             .add_text(value)
             .bold()
-            .size(20)
+            .size(18)
             .color(DOC_PRIMARY_COLOR)
     } else {
-        Run::new().add_text(value).size(19).color(DOC_TEXT_COLOR)
+        Run::new().add_text(value).size(17).color(DOC_TEXT_COLOR)
     };
-    let cell = TableCell::new().add_paragraph(Paragraph::new().add_run(run));
+    let mut cell = TableCell::new().add_paragraph(Paragraph::new().add_run(run));
+    if let Some(width) = width {
+        cell = cell.width(width, WidthType::Dxa);
+    }
     if header {
         cell.shading(
             Shading::new()
@@ -831,8 +868,40 @@ fn docx_cell(value: &str, header: bool) -> TableCell {
     }
 }
 
+fn compact_page_margin() -> PageMargin {
+    PageMargin {
+        top: 720,
+        right: 720,
+        bottom: 720,
+        left: 720,
+        header: 360,
+        footer: 360,
+        gutter: 0,
+    }
+}
+
+fn light_table_borders() -> TableBorders {
+    [
+        TableBorderPosition::Top,
+        TableBorderPosition::Left,
+        TableBorderPosition::Bottom,
+        TableBorderPosition::Right,
+        TableBorderPosition::InsideH,
+        TableBorderPosition::InsideV,
+    ]
+    .into_iter()
+    .fold(TableBorders::with_empty(), |borders, position| {
+        borders.set(
+            TableBorder::new(position)
+                .border_type(BorderType::Single)
+                .size(2)
+                .color(DOC_BORDER_COLOR),
+        )
+    })
+}
+
 fn title_heading(value: &str) -> Paragraph {
-    Paragraph::new().add_run(
+    spaced_paragraph(0, 220).add_run(
         Run::new()
             .add_text(value)
             .bold()
@@ -842,7 +911,7 @@ fn title_heading(value: &str) -> Paragraph {
 }
 
 fn section_heading(value: &str) -> Paragraph {
-    Paragraph::new().add_run(
+    spaced_paragraph(260, 120).add_run(
         Run::new()
             .add_text(value)
             .bold()
@@ -852,7 +921,7 @@ fn section_heading(value: &str) -> Paragraph {
 }
 
 fn subsection_heading(value: &str) -> Paragraph {
-    Paragraph::new().add_run(
+    spaced_paragraph(140, 80).add_run(
         Run::new()
             .add_text(value)
             .bold()
@@ -862,7 +931,17 @@ fn subsection_heading(value: &str) -> Paragraph {
 }
 
 fn paragraph(value: &str) -> Paragraph {
-    Paragraph::new().add_run(Run::new().add_text(value).size(20).color(DOC_MUTED_COLOR))
+    spaced_paragraph(40, 120).add_run(Run::new().add_text(value).size(20).color(DOC_MUTED_COLOR))
+}
+
+fn spaced_paragraph(before: u32, after: u32) -> Paragraph {
+    Paragraph::new().line_spacing(LineSpacing::new().before(before).after(after))
+}
+
+fn spacer_paragraph(after: u32) -> Paragraph {
+    Paragraph::new()
+        .line_spacing(LineSpacing::new().after(after))
+        .add_run(Run::new().add_text(" ").size(2).color("FFFFFF"))
 }
 
 fn safe_file_name(value: &str) -> String {

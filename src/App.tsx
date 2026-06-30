@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import appIcon from "./assets/schemaforge-icon-distinctive.png";
 import "./App.css";
@@ -41,7 +41,8 @@ function App() {
   const [produceType, setProduceType] = useState<ProduceType>("freemarker");
   const [language, setLanguage] = useState<OutputLanguage>("zh-CN");
   const [fileName, setFileName] = useState("");
-  const [status, setStatus] = useState("配置仅保留在当前窗口");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [runMessage, setRunMessage] = useState("");
 
   const schemaList = useMemo(
     () =>
@@ -90,21 +91,23 @@ function App() {
     username,
   ]);
 
-  useEffect(() => {
-    setStatus("ForgeCore 已启用，配置不会保存到本地");
-  }, []);
-
   async function generateDoc() {
-    setStatus("正在生成文档...");
+    if (isGenerating) {
+      return;
+    }
+    setIsGenerating(true);
+    setRunMessage("正在生成文档...");
     try {
       const result = await invoke<{
         schemas: string[];
         output_dir: string;
         stdout: string;
       }>("generate_doc", { config });
-      setStatus(`生成完成：${result.schemas.join(", ")} -> ${result.output_dir}`);
+      setRunMessage(`生成完成：${result.schemas.join(", ")}`);
     } catch (error) {
-      setStatus(`生成失败：${String(error)}`);
+      setRunMessage(`生成失败：${String(error)}`);
+    } finally {
+      setIsGenerating(false);
     }
   }
 
@@ -120,8 +123,16 @@ function App() {
             </div>
           </div>
           <div className="actions">
-            <button className="primary" type="button" onClick={generateDoc}>
-              生成文档
+            {runMessage && <span className="run-message">{runMessage}</span>}
+            <button
+              className="primary"
+              type="button"
+              disabled={isGenerating}
+              aria-busy={isGenerating}
+              onClick={generateDoc}
+            >
+              {isGenerating && <span className="spinner" aria-hidden="true" />}
+              {isGenerating ? "生成中" : "生成文档"}
             </button>
           </div>
         </header>
@@ -194,6 +205,9 @@ function App() {
                 <textarea
                   rows={5}
                   value={schemas}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   onChange={(event) => setSchemas(event.currentTarget.value)}
                 />
               </label>
@@ -299,12 +313,6 @@ function App() {
                   <strong>{fileName.trim() || "默认使用 Schema 名称"}</strong>
                 </div>
               </div>
-            </section>
-
-            <section className="run-panel">
-              <div className="run-glow" />
-              <h3>生成状态</h3>
-              <p>{status}</p>
             </section>
           </aside>
         </div>
