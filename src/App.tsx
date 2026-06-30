@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import appIcon from "./assets/schemaforge-icon-distinctive.png";
 import "./App.css";
 
 type FileType = "HTML" | "WORD" | "MD";
 type ProduceType = "freemarker" | "velocity";
+type OutputLanguage = "zh-CN" | "en-US";
 type AppConfig = {
   spring: {
     datasource: {
@@ -21,6 +22,7 @@ type AppConfig = {
       "open-output-dir": boolean;
       "file-type": FileType;
       "produce-type": ProduceType;
+      language: OutputLanguage;
       "file-name"?: string;
     };
   };
@@ -37,8 +39,10 @@ function App() {
   const [openOutputDir, setOpenOutputDir] = useState(true);
   const [fileType, setFileType] = useState<FileType>("HTML");
   const [produceType, setProduceType] = useState<ProduceType>("freemarker");
+  const [language, setLanguage] = useState<OutputLanguage>("zh-CN");
   const [fileName, setFileName] = useState("");
-  const [status, setStatus] = useState("配置仅保留在当前窗口");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [runMessage, setRunMessage] = useState("");
 
   const schemaList = useMemo(
     () =>
@@ -55,6 +59,7 @@ function App() {
       "open-output-dir": openOutputDir,
       "file-type": fileType,
       "produce-type": produceType,
+      language,
     };
     if (fileName.trim()) {
       engine["file-name"] = fileName.trim();
@@ -77,6 +82,7 @@ function App() {
     fileName,
     fileType,
     jdbcUrl,
+    language,
     openOutputDir,
     outputDir,
     password,
@@ -85,21 +91,23 @@ function App() {
     username,
   ]);
 
-  useEffect(() => {
-    setStatus("CLI 生成器按需启动，配置不会保存到本地");
-  }, []);
-
   async function generateDoc() {
-    setStatus("正在生成文档...");
+    if (isGenerating) {
+      return;
+    }
+    setIsGenerating(true);
+    setRunMessage("正在生成文档...");
     try {
       const result = await invoke<{
         schemas: string[];
         output_dir: string;
         stdout: string;
       }>("generate_doc", { config });
-      setStatus(`生成完成：${result.schemas.join(", ")} -> ${result.output_dir}`);
+      setRunMessage(`生成完成：${result.schemas.join(", ")}`);
     } catch (error) {
-      setStatus(`生成失败：${String(error)}`);
+      setRunMessage(`生成失败：${String(error)}`);
+    } finally {
+      setIsGenerating(false);
     }
   }
 
@@ -115,8 +123,16 @@ function App() {
             </div>
           </div>
           <div className="actions">
-            <button className="primary" type="button" onClick={generateDoc}>
-              生成文档
+            {runMessage && <span className="run-message">{runMessage}</span>}
+            <button
+              className="primary"
+              type="button"
+              disabled={isGenerating}
+              aria-busy={isGenerating}
+              onClick={generateDoc}
+            >
+              {isGenerating && <span className="spinner" aria-hidden="true" />}
+              {isGenerating ? "生成中" : "生成文档"}
             </button>
           </div>
         </header>
@@ -131,8 +147,8 @@ function App() {
             <p>文件类型</p>
           </div>
           <div>
-            <span>{produceType}</span>
-            <p>模板引擎</p>
+            <span>{language === "zh-CN" ? "中文" : "EN"}</span>
+            <p>输出语言</p>
           </div>
           <div>
             <span>{openOutputDir ? "ON" : "OFF"}</span>
@@ -189,6 +205,9 @@ function App() {
                 <textarea
                   rows={5}
                   value={schemas}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   onChange={(event) => setSchemas(event.currentTarget.value)}
                 />
               </label>
@@ -209,7 +228,7 @@ function App() {
                   onChange={(event) => setOutputDir(event.currentTarget.value)}
                 />
               </label>
-              <div className="three-column">
+              <div className="settings-grid">
                 <label>
                   <span>文件类型</span>
                   <select
@@ -233,6 +252,18 @@ function App() {
                   >
                     <option value="freemarker">freemarker</option>
                     <option value="velocity">velocity</option>
+                  </select>
+                </label>
+                <label>
+                  <span>输出语言</span>
+                  <select
+                    value={language}
+                    onChange={(event) =>
+                      setLanguage(event.currentTarget.value as OutputLanguage)
+                    }
+                  >
+                    <option value="zh-CN">中文</option>
+                    <option value="en-US">English</option>
                   </select>
                 </label>
                 <label>
@@ -274,16 +305,14 @@ function App() {
                   <strong>{produceType}</strong>
                 </div>
                 <div>
+                  <span>输出语言</span>
+                  <strong>{language === "zh-CN" ? "中文" : "English"}</strong>
+                </div>
+                <div>
                   <span>文件名</span>
                   <strong>{fileName.trim() || "默认使用 Schema 名称"}</strong>
                 </div>
               </div>
-            </section>
-
-            <section className="run-panel">
-              <div className="run-glow" />
-              <h3>生成状态</h3>
-              <p>{status}</p>
             </section>
           </aside>
         </div>

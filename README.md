@@ -2,13 +2,16 @@
 
 SchemaForge is a desktop tool for generating database dictionary documents from database schemas.
 
-The desktop shell is built with Tauri, React, and TypeScript. Document generation is delegated to a lightweight Java CLI generator that uses `screw-core` to inspect database metadata and generate documents.
+The desktop shell is built with Tauri, React, and TypeScript. Document generation is handled by ForgeCore, a Rust generation core that inspects database metadata and writes database dictionary documents.
 
 ## Features
 
 - Configure JDBC connection information in the desktop UI
-- Generate database dictionary documents for one or more schemas
-- Support HTML, Word, and Markdown output types provided by `screw-core`
+- Generate database dictionary documents for one or more MySQL schemas
+- Support HTML, Word, and Markdown output in the Rust ForgeCore path
+- Control output language for built-in labels, currently Chinese (`zh-CN`) and English (`en-US`)
+- Keep the database inspector behind a Rust trait so additional databases can be added later
+- Recognize MySQL, PostgreSQL, and Oracle JDBC URLs; MySQL metadata inspection is implemented first
 - Keep configuration in memory for the current window; the app does not persist database credentials by default
 
 ## Project Structure
@@ -17,7 +20,10 @@ The desktop shell is built with Tauri, React, and TypeScript. Document generatio
 schema-forge/
   src/                  React frontend
   src-tauri/            Tauri desktop shell
-  backend/              Java CLI generator
+  src-tauri/src/forge_core/
+                        Rust metadata inspector and document renderer
+  src-tauri/src/forge_core/i18n/
+                        Built-in document label language files
   config-template/      Example application.yml template
 ```
 
@@ -27,12 +33,6 @@ Install frontend dependencies:
 
 ```bash
 npm install
-```
-
-Build the Java generator:
-
-```bash
-npm run generator:build
 ```
 
 Start the desktop app:
@@ -45,32 +45,16 @@ Build checks:
 
 ```bash
 npm run build
-npm run generator:build
+cd src-tauri && cargo check
 ```
 
 ## Configuration Behavior
 
-SchemaForge currently writes the UI configuration to a temporary file only when a generation task starts, passes that file to the Java CLI generator, and removes the temporary file after the generator exits.
+SchemaForge passes the UI configuration directly to the Rust ForgeCore command. ForgeCore currently supports MySQL metadata inspection and writes generated files to the configured output directory.
+
+Set `screw.engine.language` to `zh-CN` or `en-US` to control the generated document labels and table headings. Built-in label files live in `src-tauri/src/forge_core/i18n/`, so future languages can be added with the same JSON structure.
 
 It does not save database credentials or `application.yml` to a persistent file by default.
-
-## Open Source Notice
-
-SchemaForge uses [`screw-core`](https://github.com/pingfangushi/screw), an open-source database table structure documentation generator.
-
-The Maven metadata for `cn.smallbun.screw:screw-core:1.0.5` declares the parent project license as:
-
-```text
-GNU Lesser General Public License v3.0
-```
-
-License URL:
-
-```text
-https://www.gnu.org/licenses/lgpl-3.0.html
-```
-
-When distributing SchemaForge, make sure to comply with the LGPL-3.0 obligations for the `screw-core` dependency and its notices. SchemaForge is not affiliated with or endorsed by the `screw` project.
 
 ## License
 
@@ -81,8 +65,6 @@ SchemaForge is released under the MIT License. See [LICENSE](LICENSE).
 - Tauri
 - React
 - TypeScript
-- Java CLI generator
-- Maven
-- `cn.smallbun.screw:screw-core`
-- HikariCP
-- MySQL Connector/J
+- Rust
+- ForgeCore
+- `mysql`

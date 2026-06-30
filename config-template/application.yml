@@ -13,3 +13,4 @@ screw:
     open-output-dir: true
     file-type: HTML
     produce-type: freemarker
+    language: zh-CN
