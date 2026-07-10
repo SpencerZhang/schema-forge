@@ -127,13 +127,6 @@ Supported weak-relation examples include:
 
 - `user_id -> users.id`
 - `dept_code -> departments.code`
-- `ecm_interface.interface_id -> ecm_interface_param.interface_id`
-- `ecm_arch_elem_sync_itf.interface_id -> ecm_arc_elem_sync_itf_param.interface_id`
-- `ecm_archive_element_itf.interface_id -> ecm_arc_elem_asyn_itf_param.interface_id`
-- `ecm_archive.archive_id -> ecm_archive_dtl.archive_id`
-- `ecm_archive_dtl.element_id -> ecm_archive_element.element_id`
-- `ecm_archive_element.element_id -> ecm_archive_element_attachment.element_id`
-- `ecm_archive_element_type.element_type_id -> ecm_archive_element_type_tl.element_type_id`
 
 When multiple candidates have the same confidence, SchemaForge skips the relation instead of guessing.
 
