@@ -12,10 +12,10 @@
   "app": {
     "windows": [
       {
-        "title": "SchemaForge - 数据库字典生成器",
-        "width": 1280,
+        "title": "SchemaForge - 数据库文档与 ER 图生成器",
+        "width": 1360,
         "minWidth": 1180,
-        "height": 860,
+        "height": 840,
         "minHeight": 760
       }
     ],

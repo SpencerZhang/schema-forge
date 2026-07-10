@@ -1,16 +1,40 @@
-spring:
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: "jdbc:mysql://127.0.0.1:3306/?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai"
-    username: your_username
-    password: your_password
+database:
+  driver: mysql
+  url: "jdbc:mysql://127.0.0.1:3306/?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai"
+  username: your_username
+  password: your_password
 
-screw:
-  schemas:
-    - your_database
-  engine:
-    file-output-dir: ./schema-forge-output
-    open-output-dir: true
-    file-type: HTML
-    produce-type: freemarker
-    language: zh-CN
+schemas:
+  - your_database
+
+tables:
+  # Optional table names or simple wildcard patterns excluded from documents and ER diagrams.
+  # Examples: migration metadata tables, tmp_*, *_log, *_bak
+  ignore:
+    - flyway_schema_history
+    - databasechangelog
+    - databasechangeloglock
+    - "*_log"
+    - "*_bak"
+
+output:
+  dir: ./schema-forge-output
+  open-dir: true
+  file-type: HTML
+  language: zh-CN
+  # Optional file name. Leave empty to use the schema name.
+  # file-name: database-dictionary
+
+relations:
+  # Optional JSON file for business relations not enforced by database foreign keys.
+  # See config-template/schema-forge-relations.json for the relation format.
+  # file: ./config-template/schema-forge-relations.json
+  # Optional token aliases for weak relation discovery. Keep project-specific abbreviations here.
+  aliases:
+    archive: [arc, arch]
+    element: [elem]
+    interface: [itf, iface]
+    async: [asyn]
+    department: [dept]
+    organization: [org]
+    user: [usr]

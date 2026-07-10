@@ -1,0 +1,34 @@
+[
+  {
+    "_comment": "示例 1：created_by 不是物理外键，但业务上指向 users.id。",
+    "_fieldSource": "source 表示这条关系的来源；关系文件里可省略，默认 uploaded。",
+    "_fieldDescription": "description 是业务说明，可省略；会作为 ER 图关系上下文使用。",
+    "sourceTable": "orders",
+    "sourceColumn": "created_by",
+    "targetTable": "users",
+    "targetColumn": "id",
+    "relationType": "many-to-one",
+    "source": "uploaded",
+    "description": "订单创建人"
+  },
+  {
+    "_comment": "示例 2：同一张来源表可以维护多条不同业务关系。",
+    "sourceTable": "orders",
+    "sourceColumn": "approved_by",
+    "targetTable": "users",
+    "targetColumn": "id",
+    "relationType": "many-to-one",
+    "source": "uploaded",
+    "description": "订单审批人"
+  },
+  {
+    "_comment": "示例 3：也支持非 id 字段，只要能表达明确业务关联。",
+    "sourceTable": "payments",
+    "sourceColumn": "order_no",
+    "targetTable": "orders",
+    "targetColumn": "order_no",
+    "relationType": "many-to-one",
+    "source": "uploaded",
+    "description": "支付单对应订单"
+  }
+]
